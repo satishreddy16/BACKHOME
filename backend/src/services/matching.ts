@@ -69,9 +69,9 @@ export async function findMatches(userId: string, limit = 20): Promise<MatchScor
   });
 
   const scores: MatchScore[] = candidates
-    .map((candidate) => scoreMatch(currentUser, candidate))
-    .filter((m) => m.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .map((candidate: UserProfile) => scoreMatch(currentUser, candidate))
+    .filter((m: MatchScore) => m.score > 0)
+    .sort((a: MatchScore, b: MatchScore) => b.score - a.score)
     .slice(0, limit);
 
   // Cache results

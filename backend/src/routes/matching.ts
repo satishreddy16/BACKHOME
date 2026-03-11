@@ -32,13 +32,16 @@ router.get("/", authenticate, async (req: Request, res: Response, next: NextFunc
       },
     });
 
-    const userMap = new Map(users.map((u) => [u.id, u]));
+    const userMap = new Map(users.map((u: typeof users[number]) => [u.id, u]));
 
-    const results = matches.map((m) => ({
-      ...userMap.get(m.userId),
-      matchScore: m.score,
-      matchReasons: m.reasons,
-    }));
+    const results = matches.map((m: { userId: string; score: number; reasons: string[] }) => {
+      const user = userMap.get(m.userId);
+      return {
+        ...user,
+        matchScore: m.score,
+        matchReasons: m.reasons,
+      };
+    });
 
     res.json({ matches: results });
   } catch (err) {
