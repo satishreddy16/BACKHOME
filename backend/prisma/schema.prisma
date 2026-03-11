@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USER & AUTH ─────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String?   // null for OAuth-only users
+  emailVerified   Boolean   @default(false)
+  verifiedBadge   Boolean   @default(false)
+
+  // Profile
+  firstName       String
+  lastName        String
+  avatarUrl       String?
+  bio             String?
+  hometown        String    // e.g. "Hyderabad, India"
+  hometownLat     Float?
+  hometownLng     Float?
+  currentCity     String    // e.g. "San Francisco, USA"
+  currentCityLat  Float?
+  currentCityLng  Float?
+  university      String?
+  company         String?
+  profession      String?
+  languages       String[]  // ["Telugu", "Hindi", "English"]
+  interests       String[]  // ["cricket", "startups", "cooking"]
+  willingToHelp   String[]  // ["housing", "referrals", "cultural_events"]
+
+  // OAuth
+  googleId        String?   @unique
+  linkedinId      String?   @unique
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastActiveAt    DateTime  @default(now())
+
+  // Relations
+  posts           Post[]
+  events          Event[]          @relation("EventCreator")
+  eventRsvps      EventRsvp[]
+  endorsementsGiven    Endorsement[] @relation("Endorser")
+  endorsementsReceived Endorsement[] @relation("Endorsed")
+  connectionsA    Connection[]     @relation("ConnectionUserA")
+  connectionsB    Connection[]     @relation("ConnectionUserB")
+  introsSent      Introduction[]   @relation("IntroFrom")
+  introsReceived  Introduction[]   @relation("IntroTo")
+  comments        Comment[]
+
+  @@index([hometown])
+  @@index([currentCity])
+  @@index([profession])
+  @@index([university])
+}
+
+// ─── CONNECTIONS & TRUST ─────────────────────────────────────
+
+model Connection {
+  id        String           @id @default(uuid())
+  userA     User             @relation("ConnectionUserA", fields: [userAId], references: [id])
+  userAId   String
+  userB     User             @relation("ConnectionUserB", fields: [userBId], references: [id])
+  userBId   String
+  status    ConnectionStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userAId, userBId])
+  @@index([userAId, status])
+  @@index([userBId, status])
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model Endorsement {
+  id          String   @id @default(uuid())
+  endorser    User     @relation("Endorser", fields: [endorserId], references: [id])
+  endorserId  String
+  endorsed    User     @relation("Endorsed", fields: [endorsedId], references: [id])
+  endorsedId  String
+  category    String   // "housing", "referrals", "mentorship", etc.
+  message     String?
+  createdAt   DateTime @default(now())
+
+  @@unique([endorserId, endorsedId, category])
+}
+
+// ─── AI INTRODUCTIONS ────────────────────────────────────────
+
+model Introduction {
+  id          String   @id @default(uuid())
+  fromUser    User     @relation("IntroFrom", fields: [fromUserId], references: [id])
+  fromUserId  String
+  toUser      User     @relation("IntroTo", fields: [toUserId], references: [id])
+  toUserId    String
+  message     String   // AI-generated intro message
+  accepted    Boolean?
+  createdAt   DateTime @default(now())
+
+  @@index([toUserId])
+}
+
+// ─── COMMUNITY FEED ──────────────────────────────────────────
+
+model Post {
+  id        String   @id @default(uuid())
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  type      PostType @default(UPDATE)
+  title     String?
+  body      String
+  imageUrl  String?
+  city      String   // scoped to city feed
+  tags      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  comments  Comment[]
+
+  @@index([city, createdAt(sort: Desc)])
+  @@index([authorId])
+}
+
+enum PostType {
+  UPDATE
+  HELP_REQUEST
+  JOB_REFERRAL
+  EVENT_ANNOUNCEMENT
+  HOUSING
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+// ─── EVENTS ──────────────────────────────────────────────────
+
+model Event {
+  id          String      @id @default(uuid())
+  creator     User        @relation("EventCreator", fields: [creatorId], references: [id])
+  creatorId   String
+  title       String
+  description String
+  imageUrl    String?
+  location    String
+  city        String
+  lat         Float?
+  lng         Float?
+  startsAt    DateTime
+  endsAt      DateTime?
+  maxCapacity Int?
+  tags        String[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  rsvps       EventRsvp[]
+
+  @@index([city, startsAt])
+}
+
+model EventRsvp {
+  id        String     @id @default(uuid())
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   String
+  user      User       @relation(fields: [userId], references: [id])
+  userId    String
+  status    RsvpStatus @default(GOING)
+  createdAt DateTime   @default(now())
+
+  @@unique([eventId, userId])
+}
+
+enum RsvpStatus {
+  GOING
+  INTERESTED
+  NOT_GOING
+}
